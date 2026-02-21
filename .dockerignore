@@ -1,0 +1,11 @@
+node_modules
+dist
+*.db
+tokens.json
+.env
+.env.local
+.git
+.github
+docs
+*.md
+!README.md

@@ -1,0 +1,40 @@
+{
+  "name": "standup_bot",
+  "displayName": "Standup Bot",
+  "bot": true,
+  "botTitle": "Async standup check-ins for your team",
+  "socketMode": false,
+  "scopes": {
+    "botScopes": [
+      "messages:read",
+      "messages:write",
+      "messages:edit",
+      "reaction:write",
+      "users:list",
+      "channels:list",
+      "channels:read"
+    ],
+    "userScopes": []
+  },
+  "slashCommands": [
+    {
+      "command": "/standup",
+      "url": "https://your-server.com/slash",
+      "description": "Manage async standups and check-ins",
+      "usageHint": "/standup [create|list|status|run|pause|resume|questions|participants|help] [name]"
+    }
+  ],
+  "shortcuts": [],
+  "eventSubscriptions": {
+    "url": "https://your-server.com/events",
+    "events": [
+      "NEW_MESSAGE",
+      "APP_UNINSTALLED"
+    ]
+  },
+  "redirectUrls": [
+    "https://your-server.com/redirect"
+  ],
+  "welcomeMessage": "Hi! I'm Standup Bot. Use `/standup create` to set up your first async standup.",
+  "offlineMessage": "Standup Bot is currently unavailable. Please try again shortly."
+}
