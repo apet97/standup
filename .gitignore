@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment and secrets
+.env
+.env.local
+tokens.json
+
+# Database
+*.db
+*.db-wal
+*.db-shm
+data/
+
+# AI / Claude files
+CLAUDE.md
+.claude/
+docs/ai-guide.md
+docs/AI_BOOTSTRAP.md
+docs/CHANGELOG_AI.md
+docs/ENTERPRISE_REVIEW.md
+TODO_ENTERPRISE.md
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Backups
+backups/
