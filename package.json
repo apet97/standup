@@ -21,7 +21,7 @@
     "dotenv": "^16.4.0",
     "node-cron": "^3.0.3",
     "pino": "^10.3.1",
-    "pumble-sdk": "^1.0.0"
+    "pumble-sdk": "^1.0.2"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0",
