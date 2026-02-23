@@ -17,7 +17,7 @@
     "db:backup": "npx tsx scripts/db-backup.ts"
   },
   "dependencies": {
-    "better-sqlite3": "^11.0.0",
+    "better-sqlite3": "^12.6.2",
     "dotenv": "^16.4.0",
     "node-cron": "^3.0.3",
     "pino": "^10.3.1",
