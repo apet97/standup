@@ -5,6 +5,7 @@ import { getDB } from '../db';
 import { removeActiveRun } from './runner';
 import { getAddonInstance } from '../addon-instance';
 import { withRetry } from '../retry';
+import { incCounter } from '../metrics';
 
 const log = createLogger('summary');
 
@@ -53,6 +54,7 @@ export async function checkAndPostSummary(
 
     // Mark run complete
     db.completeRun(runId, msg.id, standup.channel_id);
+    incCounter('standup_runs_total', { status: 'COMPLETE' });
     log.info({ runId, channelId: standup.channel_id }, 'Posted summary');
   } catch (error) {
     log.error({ err: error, runId }, 'Failed to post summary');

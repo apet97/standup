@@ -17,23 +17,53 @@ import {
 import { onEditQuestionsSubmit } from './commands/questions';
 import { onEditParticipantsSubmit, onRemoveParticipant } from './commands/participants';
 import { handleNewMessage } from './engine/collector';
-import { reloadPendingFromDB, shutdownActiveRuns } from './engine/runner';
+import { reloadPendingFromDB, shutdownActiveRuns, getAllActiveRuns } from './engine/runner';
 import { loadAllCronJobs, clearAllCronJobs, registerRetentionJob } from './scheduler';
 import { getDB, closeDB } from './db';
 import { runWithContext, generateCorrelationId } from './context';
+import {
+  serializeMetrics,
+  defineCounter,
+  defineGauge,
+  defineHistogram,
+  startEventLoopMonitoring,
+} from './metrics';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { reportCriticalError, initSentryIfConfigured } from './error-reporter';
+
+function getVersion(): string {
+  try {
+    const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8')) as { version?: string };
+    return pkg.version ?? '0.0.0';
+  } catch {
+    return process.env['npm_package_version'] ?? '0.0.0';
+  }
+}
+
+const APP_VERSION = getVersion();
 
 const log = createLogger('main');
+
+// Define metrics
+defineCounter('standup_runs_total', 'Total standup runs by status');
+defineCounter('standup_responses_total', 'Total standup responses by type');
+defineHistogram('standup_dm_send_duration_seconds', 'Duration of DM send operations');
+defineGauge('standup_active_runs', 'Number of currently active runs', () => getAllActiveRuns().size);
+defineHistogram('standup_db_query_duration_seconds', 'Duration of DB queries');
 
 async function main(): Promise<void> {
   const config = getConfig();
 
   log.info('Starting Standup Bot...');
+  initSentryIfConfigured();
+  startEventLoopMonitoring();
 
   // Initialize database — run integrity check on startup
   const db = getDB();
   const integrity = db.integrityCheck();
   if (integrity !== 'ok') {
-    log.fatal({ integrity }, 'Database integrity check failed — refusing to start');
+    reportCriticalError(new Error('Database integrity check failed'), { integrity });
     process.exit(1);
   }
   log.info('Database initialized');
@@ -158,7 +188,7 @@ async function main(): Promise<void> {
           const healthDb = getDB();
           healthDb.healthCheck();
           const uptime = process.uptime();
-          const version = process.env['npm_package_version'] || '1.0.0';
+          const version = APP_VERSION;
           res.status(200).json({
             status: 'ok',
             uptime: Math.floor(uptime),
@@ -171,6 +201,11 @@ async function main(): Promise<void> {
             error: error instanceof Error ? error.message : 'Unknown error',
           });
         }
+      });
+
+      expressApp.get('/metrics', (_req: any, res: any) => {
+        res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+        res.send(serializeMetrics());
       });
     },
 
@@ -209,7 +244,13 @@ async function main(): Promise<void> {
   process.on('SIGTERM', shutdown);
 }
 
+process.on('unhandledRejection', (reason) => {
+  const error = reason instanceof Error ? reason : new Error(String(reason));
+  reportCriticalError(error, { source: 'unhandledRejection' });
+});
+
 main().catch((error) => {
-  log.fatal({ err: error }, 'Fatal error');
+  const err = error instanceof Error ? error : new Error(String(error));
+  reportCriticalError(err, { source: 'main' });
   process.exit(1);
 });

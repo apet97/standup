@@ -314,13 +314,30 @@ export class StandupDB {
     return streak;
   }
 
-  cleanupOldRuns(retentionDays: number): number {
-    const result = this.db
-      .prepare(
-        `DELETE FROM runs WHERE completed_at IS NOT NULL AND completed_at < datetime('now', '-' || ? || ' days')`
-      )
-      .run(retentionDays);
-    return result.changes;
+  cleanupOldRuns(retentionDays: number, chunkSize = 500): number {
+    let totalDeleted = 0;
+    const selectStmt = this.db.prepare(
+      `SELECT id FROM runs WHERE completed_at IS NOT NULL AND completed_at < datetime('now', '-' || ? || ' days') LIMIT ?`
+    );
+    const deleteResponses = this.db.prepare('DELETE FROM responses WHERE run_id = ?');
+    const deleteRun = this.db.prepare('DELETE FROM runs WHERE id = ?');
+
+    // Process in chunks to avoid blocking the event loop for too long
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    while (true) {
+      const rows = selectStmt.all(retentionDays, chunkSize) as { id: number }[];
+      if (rows.length === 0) break;
+
+      const chunk = this.db.transaction(() => {
+        for (const row of rows) {
+          deleteResponses.run(row.id);
+          deleteRun.run(row.id);
+        }
+        return rows.length;
+      });
+      totalDeleted += chunk();
+    }
+    return totalDeleted;
   }
 
   deleteWorkspaceData(workspaceId: string): void {

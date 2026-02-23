@@ -13,6 +13,7 @@
     "test:coverage": "vitest run --coverage",
     "lint": "eslint src/",
     "format": "prettier --write src/",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "db:backup": "npx tsx scripts/db-backup.ts"
   },
   "dependencies": {

@@ -10,6 +10,7 @@ import {
 } from './runner';
 import { checkAndPostSummary } from './summary';
 import { withRetry } from '../retry';
+import { incCounter } from '../metrics';
 
 const log = createLogger('collector');
 
@@ -86,6 +87,7 @@ export async function handleNewMessage(ctx: OnMessageContext): Promise<void> {
 
   const streak = db.getUserStreak(prompt.standupId, userId) + 1;
   db.storeResponse(prompt.runId, userId, answers, false, isLate, streak);
+  incCounter('standup_responses_total', { type: isLate ? 'late' : 'answered' });
 
   // Remove from pending
   removePendingPrompt(workspaceId, userId);
@@ -144,6 +146,7 @@ async function handleSkip(
 ): Promise<void> {
   const db = getDB();
   db.storeResponse(prompt.runId, prompt.userId, [], true, false, 0);
+  incCounter('standup_responses_total', { type: 'skipped' });
   removePendingPrompt(prompt.workspaceId, prompt.userId);
 
   const botClient = await ctx.getBotClient();

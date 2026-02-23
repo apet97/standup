@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS participants (
 CREATE TABLE IF NOT EXISTS runs (
   id                 INTEGER PRIMARY KEY AUTOINCREMENT,
   standup_id         INTEGER NOT NULL REFERENCES standups(id) ON DELETE CASCADE,
-  status             TEXT NOT NULL DEFAULT 'COLLECTING',  -- COLLECTING | COMPLETE
+  status             TEXT NOT NULL DEFAULT 'COLLECTING',  -- COLLECTING | COMPLETE | INTERRUPTED
   triggered_by       TEXT NOT NULL DEFAULT 'schedule',    -- schedule | manual
   triggered_at       TEXT NOT NULL DEFAULT (datetime('now')),
   completed_at       TEXT,
@@ -77,29 +77,41 @@ CREATE TABLE IF NOT EXISTS responses (
 ## Indexes
 
 ```sql
+-- 001_initial.sql
 CREATE INDEX IF NOT EXISTS idx_standups_workspace ON standups(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_questions_standup ON questions(standup_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_participants_standup ON participants(standup_id);
 CREATE INDEX IF NOT EXISTS idx_runs_standup ON runs(standup_id, triggered_at DESC);
 CREATE INDEX IF NOT EXISTS idx_responses_run ON responses(run_id);
+
+-- 002_add_indexes.sql (performance)
+CREATE INDEX IF NOT EXISTS idx_responses_user ON responses(user_id);
+CREATE INDEX IF NOT EXISTS idx_runs_standup_status ON runs(standup_id, status);
+CREATE INDEX IF NOT EXISTS idx_responses_run_late ON responses(run_id, is_late);
 ```
 
-## Schema Initialization
+## Schema Initialization (Migration Runner)
 
 ```typescript
-// src/db/schema.ts
+// src/db/schema.ts — migration-based schema management
 import Database from 'better-sqlite3';
+
+// Tracks applied migrations in `schema_version` table
+// Reads numbered SQL files from src/db/migrations/ (e.g., 001_initial.sql, 002_add_indexes.sql)
+// Each migration runs in a transaction; version recorded on success
 
 export function initializeDatabase(dbPath: string): Database.Database {
   const db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
-  db.exec(SCHEMA_SQL);
+  runMigrations(db);  // applies pending migrations from migrations/ dir
   return db;
 }
 ```
 
 WAL mode enables concurrent reads. Foreign keys enforced for cascade deletes.
+
+**Migration files:** `src/db/migrations/001_initial.sql` (6 tables + indexes), `002_add_indexes.sql` (performance indexes). Do NOT edit existing migration files — always create a new numbered file.
 
 ## Common Queries
 
@@ -336,7 +348,7 @@ interface NewQuestion {
 interface Run {
   id: number;
   standup_id: number;
-  status: 'COLLECTING' | 'COMPLETE';
+  status: 'COLLECTING' | 'COMPLETE' | 'INTERRUPTED';
   triggered_by: string;
   triggered_at: string;
   completed_at: string | null;
@@ -381,14 +393,18 @@ interface PendingPrompt {
   workspaceId: string;
 }
 
+interface ParsedResponse extends Omit<Response, 'answers'> {
+  answers: string[];
+}
+
 interface ActiveRun {
   runId: number;
   standupId: number;
   standup: Standup;
   questions: Question[];
   participants: string[];
-  reminderTimer?: NodeJS.Timeout;
-  cutoffTimer?: NodeJS.Timeout;
+  reminderTimer?: NodeJS.Timeout | undefined;
+  cutoffTimer?: NodeJS.Timeout | undefined;
 }
 ```
 
@@ -399,6 +415,13 @@ interface ActiveRun {
 
 interface StandupDB {
   close(): void;
+
+  // Health & Maintenance
+  healthCheck(): void;                              // SELECT 1 — throws on failure
+  integrityCheck(): string;                         // PRAGMA integrity_check
+  getCollectingRunForStandup(standupId: number): Run | undefined;  // idempotency guard
+  markRunInterrupted(runId: number): void;          // graceful shutdown
+  cleanupOldRuns(retentionDays: number): number;    // data retention, returns deleted count
 
   // Workspaces
   upsertWorkspace(ws: Workspace): void;

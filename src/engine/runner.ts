@@ -6,6 +6,7 @@ import type { Standup, Question, PendingPrompt, ActiveRun } from '../types';
 import { scheduleReminder, scheduleCutoff, clearRunTimers } from './reminder';
 import { checkAndPostSummary } from './summary';
 import { withRetry } from '../retry';
+import { incCounter, observeHistogram } from '../metrics';
 
 const log = createLogger('runner');
 
@@ -94,6 +95,7 @@ export async function triggerStandupRun(
 
   // Create the run record
   const runId = db.createRun(standup.id, triggeredBy);
+  incCounter('standup_runs_total', { status: 'COLLECTING' });
   log.info({ runId, standupName: standup.name, triggeredBy }, 'Created run');
 
   // Register active run
@@ -117,6 +119,7 @@ export async function triggerStandupRun(
   for (const userId of participants) {
     try {
       const blocks = buildPromptBlocks(standup.name, today, questions);
+      const dmStart = Date.now();
       const dmChannel = await withRetry(
         () => botClient.v1.channels.getDirectChannel([userId]),
         { context: { userId, runId, op: 'getDirectChannel' } }
@@ -130,6 +133,7 @@ export async function triggerStandupRun(
         }),
         { context: { userId, runId, channelId, op: 'sendPrompt' } }
       );
+      observeHistogram('standup_dm_send_duration_seconds', (Date.now() - dmStart) / 1000);
 
       // Track pending prompt
       const key = `${standup.workspace_id}:${userId}`;
