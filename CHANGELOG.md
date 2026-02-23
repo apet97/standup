@@ -4,6 +4,22 @@ All notable changes to the Standup Bot will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-02-24
+
+### Added
+
+- Prometheus metrics endpoint (`GET /metrics`) with run/response counters, DM send histogram, event loop lag
+- E2E test suite with mock SDK (`npm run test:e2e`)
+- Pluggable error reporter with optional Sentry integration (`SENTRY_DSN`)
+- Operations runbook (`docs/runbook.md`) and config reference (`docs/config.md`)
+- Dependabot configuration for automated dependency updates
+
+### Changed
+
+- Healthcheck reads version from `package.json` at startup (works outside `npm start`)
+- `cleanupOldRuns()` processes in chunks of 500 to avoid blocking event loop
+- Fixed 6 high-severity vulnerabilities in `@typescript-eslint` packages
+
 ## [1.0.0] - 2026-02-23
 
 ### Added
